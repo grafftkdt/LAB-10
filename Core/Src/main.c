@@ -1,21 +1,21 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * <h2><center>&copy; Copyright (c) 2021 STMicroelectronics.
-  * All rights reserved.</center></h2>
-  *
-  * This software component is licensed by ST under BSD 3-Clause license,
-  * the "License"; You may not use this file except in compliance with the
-  * License. You may obtain a copy of the License at:
-  *                        opensource.org/licenses/BSD-3-Clause
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * <h2><center>&copy; Copyright (c) 2021 STMicroelectronics.
+ * All rights reserved.</center></h2>
+ *
+ * This software component is licensed by ST under BSD 3-Clause license,
+ * the "License"; You may not use this file except in compliance with the
+ * License. You may obtain a copy of the License at:
+ *                        opensource.org/licenses/BSD-3-Clause
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
@@ -48,11 +48,18 @@ SPI_HandleTypeDef hspi3;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim11;
 
-UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+uint16_t ADCin = 0;
+uint64_t _micro = 0;
 
+uint16_t dataOut = 0;	//12bits of DAC (data)
+uint8_t DACConfig = 0b0011;		//upper 4 bit of DAC
+// 0 >> write A 				1 >> write B
+// 0 >> Vref unbuffered			1 >> Vref buffered
+// 0 >> Vout = 2*Vref*D/4096	1 >> Vout = 1*Vref*D/4096
+// 0 >> No shutdown				1 >> Shutdown
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -64,8 +71,10 @@ static void MX_ADC1_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_SPI3_Init(void);
 static void MX_TIM11_Init(void);
-static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
+
+void MCP4922SetOutput(uint8_t Config, uint16_t DACOutput);
+uint64_t micros();
 
 /* USER CODE END PFP */
 
@@ -108,19 +117,35 @@ int main(void)
   MX_TIM3_Init();
   MX_SPI3_Init();
   MX_TIM11_Init();
-  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
+	HAL_TIM_Base_Start(&htim3);
+	HAL_TIM_Base_Start_IT(&htim11);
+	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) &ADCin, 1);
 
+	HAL_GPIO_WritePin(LOAD_GPIO_Port, LOAD_Pin, GPIO_PIN_RESET);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
+	while (1)
+	{
+		static uint64_t timestamp = 0;
+		if (micros() - timestamp > 100)	//100 microsec >> 10 kHz
+		{
+			timestamp = micros();
+			dataOut++;	//sawtooth >> increase dataout until 4096 then % >> sawtooth graph
+			dataOut %= 4096;	// data 12 bits >> 2^12 = 4096
+			if (hspi3.State == HAL_SPI_STATE_READY
+					&& HAL_GPIO_ReadPin(SPI_SS_GPIO_Port, SPI_SS_Pin)
+							== GPIO_PIN_SET)
+			{
+				MCP4922SetOutput(DACConfig, dataOut);
+			}
+		}
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  }
+	}
   /* USER CODE END 3 */
 }
 
@@ -333,39 +358,6 @@ static void MX_TIM11_Init(void)
 }
 
 /**
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART1_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART1_Init 0 */
-
-  /* USER CODE END USART1_Init 0 */
-
-  /* USER CODE BEGIN USART1_Init 1 */
-
-  /* USER CODE END USART1_Init 1 */
-  huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
-  huart1.Init.WordLength = UART_WORDLENGTH_8B;
-  huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_NONE;
-  huart1.Init.Mode = UART_MODE_TX_RX;
-  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART1_Init 2 */
-
-  /* USER CODE END USART1_Init 2 */
-
-}
-
-/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -471,7 +463,36 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void MCP4922SetOutput(uint8_t Config, uint16_t DACOutput)
+{
+	uint32_t OutputPacket = (DACOutput & 0x0fff) | ((Config & 0xf) << 12);
+	//outputpacket >> config 4 bits + DACOutput (data) 12 bits
 
+	HAL_GPIO_WritePin(SPI_SS_GPIO_Port, SPI_SS_Pin, GPIO_PIN_RESET);
+	HAL_SPI_Transmit_IT(&hspi3, &OutputPacket, 1);	//size 1 >> 1 outputpacket => 16 bits
+}
+
+void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+	if (hspi == &hspi3)
+	{
+		//transmit complete >> slave select turn to HIGH to tell that it's complete (every rounds)
+		HAL_GPIO_WritePin(SPI_SS_GPIO_Port, SPI_SS_Pin, GPIO_PIN_SET);
+	}
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+	if (htim == &htim11)
+	{
+		_micro += 65535;
+	}
+}
+
+inline uint64_t micros()
+{
+	return htim11.Instance->CNT + _micro;
+}
 /* USER CODE END 4 */
 
 /**
@@ -481,11 +502,11 @@ static void MX_GPIO_Init(void)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
-  {
-  }
+	/* User can add his own implementation to report the HAL error return state */
+	__disable_irq();
+	while (1)
+	{
+	}
   /* USER CODE END Error_Handler_Debug */
 }
 
