@@ -77,7 +77,12 @@ enum _Mode
 	Mode_SquareWave_Wait = 70
 };
 uint32_t CurrentMode = 0;		// Main Menu
-int Frequency = 5;				//default frequency = 5 Hz
+float Frequency = 5;				//default frequency = 5 Hz
+float MaxV = 3.3;					//Maximum voltage = 3.3V
+float MinV = 0;					//Minimum voltage = 0V
+int Slope = 1;					//1>>SlopeUp (default) -1>>SlopDown
+int DutyCycle = 50;				//DutyCycle 0-100 % default at 50 %
+int period = 0;
 
 char TxDataBuffer[32] = { 0 };
 char RxDataBuffer[32] = { 0 };
@@ -244,11 +249,11 @@ int main(void)
 		  	  					"k : Slop UP\r\n"
 								"x : back\r\n";
 		  	  					HAL_UART_Transmit(&huart1, (uint8_t*)temp, strlen(temp),1000);
-		  	  					CurrentMode = Mode_Menu0Wait;
+		  	  					CurrentMode = Mode_SawTooth_Wait;
 		  	  					break;
 		  	  				}
 
-		  	  				case Mode_SawTooth_Wait	:		//default 5 Hz >> rabge 0 - 10 Hz
+		  	  				case Mode_SawTooth_Wait	:		//default 5 Hz >> range 0 - 10 Hz
 		  	  					switch (inputchar)
 		  	  					{
 
@@ -261,7 +266,7 @@ int main(void)
 		  	  					  		{
 		  	  					  			Frequency = 10;
 		  	  					  		}
-		  	  					  		sprintf(temp, "Current Frequency : [%d]\r\n" , LEDFrequency);
+		  	  					  		sprintf(temp, "Current Frequency : [%d]\r\n" , Frequency);
 		  	  					  		HAL_UART_Transmit(&huart1, (uint8_t*)temp, strlen(temp),1000);
 		  	  					  		CurrentMode = Mode_SawTooth;
 		  	  					  		break;
@@ -272,28 +277,72 @@ int main(void)
 		  	  					  		{
 		  	  					  			Frequency = 0;
 		  	  					  		}
-										sprintf(temp, "Current Frequency : [%d]\r\n" , LEDFrequency);
+										sprintf(temp, "Current Frequency : [%d]\r\n" , Frequency);
 										HAL_UART_Transmit(&huart1, (uint8_t*)temp, strlen(temp),1000);
 										CurrentMode = Mode_SawTooth;
 										break;
 
 		  	  					  	case 'd' :	// Set V_High +0.1V
-		  	  					  		if (LEDState == 0)
+		  	  					  		MaxV += 0.1;
+		  	  					  		if (MaxV >= 3.3)
 		  	  					  		{
-		  	  					  			LEDState = 1;
-		  	  					  			char temp[] = "\r\nLED State : ON\r\n";
-		  	  					  			HAL_UART_Transmit(&huart1, (uint8_t*)temp, strlen(temp),1000);
-		  	  					  			CurrentMode = Mode_Menu0;
-		  	  					  			break;
+		  	  					  			MaxV = 3.3;
 		  	  					  		}
-		  	  					  		else
+		  	  					  		sprintf(temp, "Current V_High : [%d]\r\n" , MaxV);
+		  	  					  		sprintf(temp, "Current V_Low : [%d]\r\n" , MinV);
+		  	  					  		HAL_UART_Transmit(&huart1, (uint8_t*)temp, strlen(temp),1000);
+		  	  					  		CurrentMode = Mode_SawTooth;
+		  	  					  		break;
+
+		  	  					  	case 'f' :	// Set V_High -0.1V
+		  	  					  		MaxV -= 0.1;
+		  	  					  		if (MaxV <= 0.1)
 		  	  					  		{
-		  	  					  			LEDState = 0;
-		  	  					  			char temp[] = "\r\nLED State : OFF\r\n";
-		  	  					  			HAL_UART_Transmit(&huart1, (uint8_t*)temp, strlen(temp),1000);
-		  	  					  			CurrentMode = Mode_Menu0;
-		  	  					  			break;
+		  	  					  			MaxV = 0.1;
 		  	  					  		}
+		  	  					  		sprintf(temp, "Current V_High : [%d]\r\n" , MaxV);
+		  	  					  		sprintf(temp, "Current V_Low : [%d]\r\n" , MinV);
+		  	  					  		HAL_UART_Transmit(&huart1, (uint8_t*)temp, strlen(temp),1000);
+		  	  					  		CurrentMode = Mode_SawTooth;
+		  	  					  		break;
+
+		  	  					  	case 'g' :	// Set V_Low +0.1V
+		  	  					  		MinV += 0.1;
+		  	  					  		if (MinV >= 3.2)
+		  	  					  		{
+		  	  					  			MinV = 3.2;
+		  	  					  		}
+		  	  					  		sprintf(temp, "Current V_High : [%d]\r\n" , MaxV);
+		  	  					  		sprintf(temp, "Current V_Low : [%d]\r\n" , MinV);
+		  	  					  		HAL_UART_Transmit(&huart1, (uint8_t*)temp, strlen(temp),1000);
+		  	  					  		CurrentMode = Mode_SawTooth;
+		  	  					  		break;
+
+		  	  					  	case 'h' :	// Set V_Low -0.1V
+		  	  					  		MinV -= 0.1;
+		  	  					  		if (MinV <= 0)
+		  	  					  		{
+		  	  					  			MinV = 0;
+		  	  					  		}
+		  	  					  		sprintf(temp, "Current V_High : [%d]\r\n" , MaxV);
+		  	  					  		sprintf(temp, "Current V_Low : [%d]\r\n" , MinV);
+		  	  					  		HAL_UART_Transmit(&huart1, (uint8_t*)temp, strlen(temp),1000);
+		  	  					  		CurrentMode = Mode_SawTooth;
+		  	  					  		break;
+
+		  	  					  	case 'j' :	//Slop DOWN
+		  	  					  		Slope = -1;
+		  	  					  		sprintf(temp, "SLOPE DOWN");
+		  	  					  		HAL_UART_Transmit(&huart1, (uint8_t*)temp, strlen(temp),1000);
+		  	  					  		CurrentMode = Mode_SawTooth;
+		  	  					  		break;
+
+		  	  					  	case 'k' :	//Slop UP
+		  	  					  		Slope = 1;
+		  	  					  		sprintf(temp, "SLOPE UP");
+		  	  					  		HAL_UART_Transmit(&huart1, (uint8_t*)temp, strlen(temp),1000);
+		  	  					  		CurrentMode = Mode_SawTooth;
+		  	  					  		break;
 
 		  	  					  	case 'x' :	//back
 		  	  					  		CurrentMode = Mode_MainMenu;
@@ -307,59 +356,25 @@ int main(void)
 		  	  					  			break;
 		  	  					  		}
 		  	  					}
-		  	  					break;
-
-		  	  				case Mode_Menu1 :	//MODE1
-		  	  				{
-		  	  					char temp[]="---------------\r\n"
-										"MENU 1 : BUTTON STATUS\r\n"
-										"---------------\r\n"
-										"x : back\r\n";
-		  	  					HAL_UART_Transmit(&huart1, (uint8_t*)temp, strlen(temp),1000);
-		  	  					CurrentMode = Mode_Menu1Wait;
-		  	  					break;
-		  	  				}
-
-		  	  				case Mode_Menu1Wait:
-		  		  	  			if (ButtonStatus[0] == 0 && ButtonStatus[1] == 1)
-		  		  	  			{
-		  		  	  				char temp[] = "Button Status : PRESS\r\n";
-		  		  	  				HAL_UART_Transmit(&huart1, (uint8_t*)temp, strlen(temp),1000);
-		  		  	  				CurrentMode = Mode_Menu1;
-		  		  	  			}
-		  		  	  			else if (ButtonStatus[0] == 1 && ButtonStatus[1] == 0)
-		  		  	  			{
-		  		  	  				char temp[] = "Button Status : UNPRESS\r\n";
-		  		  	  				HAL_UART_Transmit(&huart1, (uint8_t*)temp, strlen(temp),1000);
-		  		  	  				CurrentMode = Mode_Menu1;
-		  		  	  			}
-		  	  					switch(inputchar)
-		  	  					{
-	  	  					  		case -1 :	//no input
-	  	  					  			break;
-
-									case 'x':	//back
-										CurrentMode = Mode_MainMenu;
-										break;
-
-									default :	//error
-									{
-										char temp[] = "\r\n\r\n!!!ERROR!!!\r\n\r\n";
-										HAL_UART_Transmit(&huart1, (uint8_t*)temp, strlen(temp),1000);
-										CurrentMode = Mode_MainMenu;
-										break;
-									}
-
-		  	  					}
-		  	  					break;
-
+		  	  				if (micros() - timestamp > 100)	//100 microsec >> 10 kHz
+		  	  						{
+		  	  							timestamp = micros();
+		  	  							if (Slope == 1)		//slope UP (min>>max)
+		  	  							{
+		  	  								dataOut = MinV;
+		  	  								dataOut += (MaxV - MinV)*4096/3.3;
+		  	  								dataOut %= 4096;
+		  	  							}
+		  	  							else if (Slope == -1)	//slope DOWN (max>>min)
+		  	  							{
+		  	  								dataOut = MaxV;
+		  	  								dataOut -= (MaxV - MinV)*4096/3.3;
+		  	  								dataOut %= 4096;
+		  	  							}
+		  	  						}
+		  	  				break;
 		  	  			}
 
-		if (micros() - timestamp > 100)	//100 microsec >> 10 kHz
-		{
-			timestamp = micros();
-			dataOut++;	//sawtooth >> increase dataout until 4096 then % >> sawtooth graph (slope up)
-			dataOut %= 4096;	// data 12 bits >> 2^12 = 4096
 			if (hspi3.State == HAL_SPI_STATE_READY && HAL_GPIO_ReadPin(SPI_SS_GPIO_Port, SPI_SS_Pin) == GPIO_PIN_SET)
 			{
 				MCP4922SetOutput(DACConfig, dataOut);
@@ -370,7 +385,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	}
   /* USER CODE END 3 */
-}
+
 
 /**
   * @brief System Clock Configuration
