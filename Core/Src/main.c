@@ -77,8 +77,8 @@ enum _Mode
 	Mode_SquareWave_Wait = 70
 };
 uint32_t CurrentMode = 0;		// Main Menu
-float Frequency = 5;				//default frequency = 5 Hz
-float MaxV = 3.3;					//Maximum voltage = 3.3V
+float Frequency = 5;			//default frequency = 5 Hz
+float MaxV = 3.3;				//Maximum voltage = 3.3V
 float MinV = 0;					//Minimum voltage = 0V
 int Slope = 1;					//1>>SlopeUp (default) -1>>SlopDown
 int DutyCycle = 50;				//DutyCycle 0-100 % default at 50 %
