@@ -266,13 +266,10 @@ int main(void)
 												}
 												else if (Slope == -1)	//slope DOWN (max>>min)
 												{
-//													dataOut--;
-//													dataOut %=4096;
-////													dataOut -= ((MaxV - MinV)*4096/3.3 - (MaxV*4096/3.3));
-////													if (dataOut >= 4096.0*(MaxV-MinV))
-////													{
-////														dataOut -= 4096.0*(MaxV-MinV);
-////													}
+													dataOut = -1 * ((MaxV - MinV) * (4096.0 * micros() / (3.3 * Frequency * 1000000.0)));
+													int range = ((MinV - MaxV) * (4096.0 / 3.3));
+													dataOut %= range;
+													dataOut += (MaxV * 4096.0 /3.3);
 												}
 											}
 									break;
