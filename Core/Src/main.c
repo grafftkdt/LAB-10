@@ -55,9 +55,10 @@ TIM_HandleTypeDef htim11;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-uint16_t ADCin[5] = { 0 };
+uint16_t ADCin[5] = {0};
 uint64_t _micro = 0;
 
+uint16_t data =0;
 uint16_t dataOut = 0;			//12bits of DAC (data)
 uint8_t DACConfig = 0b0011;		//upper 4 bit of DAC
 // 0 >> write A 				1 >> write B
@@ -535,19 +536,20 @@ int main(void)
 					{
 					// ( amplitude * frequency * time % amplitude ) + initial >> V_low
 					// amplitude = (high - low) *4096/3.3
-					dataOut = (MaxV - MinV) * (4096.0 / 3.3) * Frequency * (timestamp / 1000000.0);
+					data = (MaxV - MinV) * (4096.0 / 3.3) * Frequency * (timestamp / 1000000.0);
 					int range = ((MaxV - MinV) * (4096.0 / 3.3));
-					dataOut %= range;
-//					dataOut += (MinV * 4096.0 / 3.3);
+					data %= range;
+					data += (MinV * 4096.0 / 3.3);
 					}
 				else if (Slope == -1)	//slope DOWN (max>>min)
 					{
 					// ( amplitude * frequency * time % amplitude ) + initial >> V_low + V_high
-					dataOut = -1 * (MaxV - MinV) * (4096.0 / 3.3) * Frequency * (timestamp / 1000000.0);
+					data = -1 * (MaxV - MinV) * (4096.0 / 3.3) * Frequency * (timestamp / 1000000.0);
 					int range = ((MinV - MaxV) * (4096.0 / 3.3));
-					dataOut %= range;
-					dataOut += ((MaxV + MinV) * 4096.0 / 3.3);
+					data %= range;
+					data += ((MaxV + MinV) * 4096.0 / 3.3);
 					}
+				dataOut = data;
 			}
 			if (hspi3.State == HAL_SPI_STATE_READY
 					&& HAL_GPIO_ReadPin(SPI_SS_GPIO_Port, SPI_SS_Pin)
@@ -629,7 +631,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
   hadc1.Init.ScanConvMode = DISABLE;
-  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.ContinuousConvMode = ENABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
   hadc1.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T3_TRGO;
