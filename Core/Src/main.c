@@ -58,8 +58,8 @@ UART_HandleTypeDef huart2;
 uint16_t ADCin[5] = {0};
 uint64_t _micro = 0;
 
-uint16_t data =0;
-uint16_t dataOut = 0;			//12bits of DAC (data)
+int data =0;
+int dataOut = 0;			//12bits of DAC (data)
 uint8_t DACConfig = 0b0011;		//upper 4 bit of DAC
 // 0 >> write A 				1 >> write B
 // 0 >> Vref unbuffered			1 >> Vref buffered
@@ -77,12 +77,15 @@ enum _Mode {
 	Mode_SquareWave_Wait = 70
 };
 uint32_t CurrentMode = 0;			// Main Menu
-float Frequency = 5;				//default frequency = 5 Hz
+float Frequency = 1;				//default frequency = 1 Hz
 float MaxV = 3.3;					//Maximum voltage = 3.3V
 float MinV = 0;						//Minimum voltage = 0V
 int Slope = 1;						//1>>SlopeUp (default) -1>>SlopDown
 float DutyCycle = 50;				//DutyCycle 0-100 % default at 50 %
 int range = 0;
+int Max = 0;						//Top boundary
+int Min = 0;						//Bottom boundary
+int period = 0;
 char TxDataBuffer[32] = { 0 };
 char RxDataBuffer[32] = { 0 };
 
@@ -178,7 +181,8 @@ int main(void)
 		//	  	  			HAL_UART_Transmit(&huart2, (uint8_t*)TxDataBuffer, strlen(TxDataBuffer), 1000);
 		//	  	  		}
 		static uint64_t timestamp = 0;
-		switch (CurrentMode) {
+		switch (CurrentMode)
+		{
 		case Mode_MainMenu:	//MainMENU
 		{
 			char temp[] = "\r\n---FUNCTION GENERATOR---\r\n"
@@ -244,7 +248,7 @@ int main(void)
 			break;
 		}
 
-		case Mode_SawTooth_Wait:		//default 5 Hz >> range 0 - 10 Hz
+		case Mode_SawTooth_Wait:
 			switch (inputchar) {
 
 			case -1:	//no input
@@ -313,6 +317,10 @@ int main(void)
 				break;
 
 			case 'x':	//back
+				MaxV = 3.3;
+				MinV = 0;
+				Frequency = 1;
+				Slope = 1;
 				CurrentMode = Mode_MainMenu;
 				break;
 
@@ -320,7 +328,7 @@ int main(void)
 			{
 				char temp[] = "\r\n\r\n!!!ERROR!!!\r\n\r\n";
 				HAL_UART_Transmit(&huart2, (uint8_t*) temp, strlen(temp), 1000);
-				CurrentMode = Mode_MainMenu;
+				CurrentMode = Mode_SawTooth;
 				break;
 			}
 			}
@@ -343,23 +351,10 @@ int main(void)
 			break;
 		}
 
-		case Mode_SineWave_Wait:		//default 5 Hz >> range 0 - 10 Hz
+		case Mode_SineWave_Wait:
 			switch (inputchar) {
 
 			case -1:	//no input
-				if (micros() - timestamp > 1000) {
-					timestamp = micros();
-//												if (Slope == 1)		//slope UP (min>>max)
-//												{
-//													dataOut += ((MaxV - MinV)*4096/3.3 + (MinV*4096/3.3));
-//													dataOut %= 4096*(MaxV-MinV);
-//												}
-//												else if (Slope == -1)	//slope DOWN (max>>min)
-//												{
-//													dataOut -= ((MaxV - MinV)*4096/3.3 - (MaxV*4096/3.3));
-//													dataOut %= 4096*(MaxV-MinV);
-//												}
-				}
 				break;
 
 			case 'a':	//increase frequency
@@ -411,6 +406,9 @@ int main(void)
 				break;
 
 			case 'x':	//back
+				MaxV = 3.3;
+				MinV = 0;
+				Frequency = 1;
 				CurrentMode = Mode_MainMenu;
 				break;
 
@@ -418,7 +416,7 @@ int main(void)
 			{
 				char temp[] = "\r\n\r\n!!!ERROR!!!\r\n\r\n";
 				HAL_UART_Transmit(&huart2, (uint8_t*) temp, strlen(temp), 1000);
-				CurrentMode = Mode_MainMenu;
+				CurrentMode = Mode_SineWave;
 				break;
 			}
 			}
@@ -435,30 +433,18 @@ int main(void)
 					"f : Set V_High -0.1V\r\n"
 					"g : Set V_Low +0.1V\r\n"
 					"h : Set V_Low -0.1V\r\n"
-					"j : Set Duty Cycle\r\n"
+					"j : Set Duty Cycle +5%\r\n"
+					"k : Set Duty Cycle -5%\r\n"
 					"x : back\r\n";
 			HAL_UART_Transmit(&huart2, (uint8_t*) temp, strlen(temp), 1000);
 			CurrentMode = Mode_SquareWave_Wait;
 			break;
 		}
 
-		case Mode_SquareWave_Wait:		//default 5 Hz >> range 0 - 10 Hz
+		case Mode_SquareWave_Wait:
 			switch (inputchar) {
 
 			case -1:	//no input
-				if (micros() - timestamp > 1000) {
-					timestamp = micros();
-//													if (Slope == 1)		//slope UP (min>>max)
-//													{
-//														dataOut += ((MaxV - MinV)*4096/3.3 + (MinV*4096/3.3));
-//														dataOut %= 4096*(MaxV-MinV);
-//													}
-//													else if (Slope == -1)	//slope DOWN (max>>min)
-//													{
-//														dataOut -= ((MaxV - MinV)*4096/3.3 - (MaxV*4096/3.3));
-//														dataOut %= 4096*(MaxV-MinV);
-//													}
-				}
 				break;
 
 			case 'a':	//increase frequency
@@ -509,11 +495,29 @@ int main(void)
 				CurrentMode = Mode_SquareWave;
 				break;
 
-			case 'j': // Set Duty Cycle
+			case 'j': // Set Duty Cycle +5
+				DutyCycle += 5;
+				if (DutyCycle >= 100)
+				{
+					DutyCycle = 100;
+				}
+				CurrentMode = Mode_SquareWave;
+				break;
+
+			case 'k': // Set Duty Cycle -5
+				DutyCycle -= 5;
+				if (DutyCycle <= 0)
+				{
+					DutyCycle = 0;
+				}
 				CurrentMode = Mode_SquareWave;
 				break;
 
 			case 'x':	//back
+				MaxV = 3.3;
+				MinV = 0;
+				Frequency = 1;
+				DutyCycle = 50;
 				CurrentMode = Mode_MainMenu;
 				break;
 
@@ -521,7 +525,7 @@ int main(void)
 			{
 				char temp[] = "\r\n\r\n!!!ERROR!!!\r\n\r\n";
 				HAL_UART_Transmit(&huart2, (uint8_t*) temp, strlen(temp), 1000);
-				CurrentMode = Mode_MainMenu;
+				CurrentMode = Mode_SquareWave;
 				break;
 			}
 			}
@@ -544,20 +548,63 @@ int main(void)
 				else if (Slope == -1)	//slope DOWN (max>>min)
 					{
 					// ( amplitude * frequency * time % amplitude ) + initial >> V_low + V_high
-					data = -1 * (MaxV - MinV) * (4096.0 / 3.3) * Frequency * (timestamp / 1000000.0);
+					data =  -((MaxV-MinV) * (4096.0 / 3.3) * Frequency * (timestamp / 1000000.0));
 					int range = ((MinV - MaxV) * (4096.0 / 3.3));
 					data %= range;
-					data += ((MaxV + MinV) * 4096.0 / 3.3);
+					data += ((MaxV) * 4096.0 / 3.3);
 					}
 				dataOut = data;
 			}
-			if (hspi3.State == HAL_SPI_STATE_READY
-					&& HAL_GPIO_ReadPin(SPI_SS_GPIO_Port, SPI_SS_Pin)
-							== GPIO_PIN_SET) {
+			if (hspi3.State == HAL_SPI_STATE_READY && HAL_GPIO_ReadPin(SPI_SS_GPIO_Port, SPI_SS_Pin) == GPIO_PIN_SET)
+			{
 				MCP4922SetOutput(DACConfig, dataOut);
 			}
 		}
 
+		if (CurrentMode == Mode_SineWave_Wait)
+		{
+			if (micros() - timestamp > 1000)
+			{
+				timestamp = micros();
+				//data = amplitude * sin(omega*/t) +initail>>V_Low
+				//omega = 2*pi*f
+				data = ((MaxV-MinV)*4096.0/(3.3*2))*sin(2*3.14*Frequency*timestamp/1000000.0);
+				int range = ((MaxV - MinV) * (4096.0 / 3.3));
+				data %= range;
+				data += ((MaxV-MinV)*4096.0/(3.3*2)) + (MinV*4096.0/3.3);
+				dataOut = data;
+			}
+			if (hspi3.State == HAL_SPI_STATE_READY && HAL_GPIO_ReadPin(SPI_SS_GPIO_Port, SPI_SS_Pin) == GPIO_PIN_SET)
+			{
+				MCP4922SetOutput(DACConfig, dataOut);
+			}
+		}
+
+		else if (CurrentMode == Mode_SquareWave_Wait)
+		{
+			if (micros() - timestamp > 1000)
+			{
+				int period = (1000000/Frequency)*DutyCycle/100;
+				if (micros() - timestamp < period) 		//ON
+				{
+					dataOut =  MaxV*4095/3.3;
+				}
+				if (micros() - timestamp > period)		//OFF
+				{
+					dataOut =  MinV*4095/3.3;
+				}
+				if (micros() - timestamp >= 1000000/Frequency )
+				{
+					timestamp = micros();
+				}
+
+				if (hspi3.State == HAL_SPI_STATE_READY && HAL_GPIO_ReadPin(SPI_SS_GPIO_Port, SPI_SS_Pin) == GPIO_PIN_SET)
+				{
+					MCP4922SetOutput(DACConfig, dataOut);
+				}
+			}
+
+		}
 	}
     /* USER CODE END WHILE */
 
